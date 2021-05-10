@@ -3,6 +3,7 @@
 mod block;
 mod bytes;
 mod bytes_array;
+mod flashbots;
 mod log;
 mod parity_peers;
 mod recovery;
@@ -21,6 +22,7 @@ pub use self::{
     block::{Block, BlockHeader, BlockId, BlockNumber},
     bytes::Bytes,
     bytes_array::BytesArray,
+    flashbots::{CallBundleResponse, TransactionSimulation},
     log::{Filter, FilterBuilder, Log},
     parity_peers::{
         EthProtocolInfo, ParityPeerInfo, ParityPeerType, PeerNetworkInfo, PeerProtocolsInfo, PipProtocolInfo,

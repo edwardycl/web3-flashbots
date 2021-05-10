@@ -4,6 +4,7 @@ mod accounts;
 mod eth;
 mod eth_filter;
 mod eth_subscribe;
+mod flashbots;
 mod net;
 mod parity;
 mod parity_accounts;
@@ -18,6 +19,7 @@ pub use self::{
     eth::Eth,
     eth_filter::{BaseFilter, EthFilter},
     eth_subscribe::{EthSubscribe, SubscriptionId, SubscriptionStream},
+    flashbots::Flashbots,
     net::Net,
     parity::Parity,
     parity_accounts::ParityAccounts,
@@ -119,6 +121,11 @@ impl<T: Transport> Web3<T> {
 
     /// Access methods from `txpool` namespace
     pub fn txpool(&self) -> txpool::Txpool<T> {
+        self.api()
+    }
+
+    /// Access methods from `flashbots` namespace
+    pub fn flashbots(&self) -> flashbots::Flashbots<T> {
         self.api()
     }
 
