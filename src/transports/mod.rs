@@ -8,6 +8,8 @@ pub use self::either::Either;
 #[cfg(feature = "http")]
 pub mod http;
 #[cfg(feature = "http")]
+pub use self::http::Flashbots;
+#[cfg(feature = "http")]
 pub use self::http::Http;
 
 #[cfg(any(feature = "ws-tokio", feature = "ws-async-std"))]

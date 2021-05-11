@@ -1,12 +1,13 @@
 //! HTTP Transport
 
-use crate::{error, helpers, rpc, BatchTransport, Error, RequestId, Transport};
+use crate::{error, helpers, rpc, signing, types::Address, BatchTransport, Error, RequestId, Transport, Web3};
 use futures::{
     self,
     task::{Context, Poll},
     Future, FutureExt, StreamExt,
 };
 use hyper::header::HeaderValue;
+use secp256k1::SecretKey;
 use std::{
     env, fmt,
     ops::Deref,
@@ -185,6 +186,97 @@ impl BatchTransport for Http {
         let requests = first.into_iter().chain(it.map(|x| x.1)).collect();
 
         self.send_request(id, rpc::Request::Batch(requests), batch_response)
+    }
+}
+
+/// Flashbots Transport
+#[derive(Debug, Clone)]
+pub struct Flashbots {
+    http: Http,
+    address: Address,
+    key: SecretKey,
+}
+
+impl Flashbots {
+    /// Create new Flashbots transport connecting to given URL.
+    pub fn new(url: &str, address: Address, key: SecretKey) -> error::Result<Self> {
+        Ok(Flashbots {
+            http: Http::new(url)?,
+            address,
+            key,
+        })
+    }
+
+    fn send_request<F, O>(&self, id: RequestId, request: rpc::Request, extract: F) -> Response<F>
+    where
+        F: Fn(Vec<u8>) -> O,
+    {
+        let request = helpers::to_string(&request);
+        log::debug!("[{}] Sending: {} to {}", id, request, self.http.url);
+        let len = request.len();
+        // Build flashbots signature
+        let flashbots_signature = self
+            .build_flashbots_signature(&serde_json::to_vec(&request).unwrap())
+            .parse()
+            .unwrap();
+        let mut req = hyper::Request::new(hyper::Body::from(request));
+        *req.method_mut() = hyper::Method::POST;
+        *req.uri_mut() = self.http.url.clone();
+        req.headers_mut().insert(
+            hyper::header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+        req.headers_mut()
+            .insert(hyper::header::USER_AGENT, HeaderValue::from_static("web3.rs"));
+        // Add flashbots signature
+        req.headers_mut().insert("X-Flashbots-Signature", flashbots_signature);
+
+        // Don't send chunked request
+        if len < MAX_SINGLE_CHUNK {
+            req.headers_mut().insert(hyper::header::CONTENT_LENGTH, len.into());
+        }
+
+        // Send basic auth header
+        if let Some(ref basic_auth) = self.http.basic_auth {
+            req.headers_mut()
+                .insert(hyper::header::AUTHORIZATION, basic_auth.clone());
+        }
+        let result = self.http.client.request(req);
+
+        Response::new(id, result, extract)
+    }
+
+    fn build_flashbots_signature(&self, msg: impl AsRef<[u8]>) -> String {
+        #[derive(Clone, Debug)]
+        struct EmptyTransport;
+        impl Transport for EmptyTransport {
+            type Out = std::future::Ready<error::Result<rpc::Value>>;
+            fn prepare(&self, _method: &str, _params: Vec<rpc::Value>) -> (RequestId, rpc::Call) {
+                panic!("cannot use empty transport")
+            }
+            fn send(&self, _id: RequestId, _request: rpc::Call) -> Self::Out {
+                panic!("cannot use empty transport")
+            }
+        }
+
+        let web3_empty = Web3::new(EmptyTransport);
+        let hash = signing::keccak256(msg.as_ref());
+        let hash_string = format!("0x{}", hex::encode(hash));
+        // `sign` function does not use any `Transport` methods
+        let signed_data = web3_empty.accounts().sign(hash_string, &self.key);
+        format!("{:?}:0x{}", self.address, hex::encode(signed_data.signature.0))
+    }
+}
+
+impl Transport for Flashbots {
+    type Out = Response<fn(Vec<u8>) -> error::Result<rpc::Value>>;
+
+    fn prepare(&self, method: &str, params: Vec<jsonrpc_core::Value>) -> (crate::RequestId, jsonrpc_core::Call) {
+        self.http.prepare(method, params)
+    }
+
+    fn send(&self, id: crate::RequestId, request: jsonrpc_core::Call) -> Self::Out {
+        self.send_request(id, rpc::Request::Single(request), single_response)
     }
 }
 
