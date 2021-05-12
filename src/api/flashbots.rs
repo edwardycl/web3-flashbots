@@ -49,7 +49,7 @@ impl<T: Transport> Flashbots<T> {
     pub fn send_bundle(
         &self,
         signed_txs: &[Bytes],
-        block: Option<BlockNumber>,
+        block: BlockNumber,
         min_timestamp: Option<u64>,
         max_timestamp: Option<u64>,
     ) -> CallFuture<(), T::Out> {
