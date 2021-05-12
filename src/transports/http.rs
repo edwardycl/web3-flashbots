@@ -211,14 +211,14 @@ impl Flashbots {
     where
         F: Fn(Vec<u8>) -> O,
     {
-        let request = helpers::to_string(&request);
-        log::debug!("[{}] Sending: {} to {}", id, request, self.http.url);
-        let len = request.len();
         // Build flashbots signature
         let flashbots_signature = self
             .build_flashbots_signature(&serde_json::to_vec(&request).unwrap())
             .parse()
             .unwrap();
+        let request = helpers::to_string(&request);
+        log::debug!("[{}] Sending: {} to {}", id, request, self.http.url);
+        let len = request.len();
         let mut req = hyper::Request::new(hyper::Body::from(request));
         *req.method_mut() = hyper::Method::POST;
         *req.uri_mut() = self.http.url.clone();
