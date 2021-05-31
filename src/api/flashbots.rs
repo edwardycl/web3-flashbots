@@ -1,9 +1,11 @@
 //! `Flashbots` namespace
 
+use serde_json::json;
+
 use crate::{
     api::Namespace,
     helpers::{self, CallFuture},
-    types::{BlockNumber, Bytes, CallBundleResponse},
+    types::{BlockNumber, Bytes, CallBundleResponse, H256},
     Transport,
 };
 
@@ -39,10 +41,15 @@ impl<T: Transport> Flashbots<T> {
         let target_block = helpers::serialize(&target_block);
         let state_block = helpers::serialize(&state_block);
         let timestamp = helpers::serialize(&timestamp);
-        CallFuture::new(
-            self.transport
-                .execute("eth_callBundle", vec![signed_txs, target_block, state_block, timestamp]),
-        )
+        CallFuture::new(self.transport.execute(
+            "eth_callBundle",
+            vec![json!({
+                "txs": signed_txs,
+                "blockNumber": target_block,
+                "stateBlockNumber": state_block,
+                "timestamp": timestamp
+            })],
+        ))
     }
 
     /// Send bundle
@@ -52,14 +59,22 @@ impl<T: Transport> Flashbots<T> {
         block: BlockNumber,
         min_timestamp: Option<u64>,
         max_timestamp: Option<u64>,
+        reverting_tx_hashes: Option<Vec<H256>>,
     ) -> CallFuture<(), T::Out> {
         let signed_txs = helpers::serialize(&signed_txs);
         let block = helpers::serialize(&block);
         let min_timestamp = helpers::serialize(&min_timestamp);
         let max_timestamp = helpers::serialize(&max_timestamp);
-        CallFuture::new(
-            self.transport
-                .execute("eth_sendBundle", vec![signed_txs, block, min_timestamp, max_timestamp]),
-        )
+        let reverting_tx_hashes = helpers::serialize(&reverting_tx_hashes);
+        CallFuture::new(self.transport.execute(
+            "eth_sendBundle",
+            vec![json!({
+                "txs": signed_txs,
+                "blockNumber": block,
+                "minTimestamp": min_timestamp,
+                "maxTimestamp": max_timestamp,
+                "revertingTxHashes": reverting_tx_hashes,
+            })],
+        ))
     }
 }
